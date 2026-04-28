@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>الخزن والتصريف - نظام القفل</title>
+    <!-- الخطوط والأيقونات -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, #0a1f3b 0%, #1a3b5c 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .app-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 25px 20px;
+            border: 2px solid #2c3e50;
+            position: relative;
+        }
+        .sync-indicator {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            background: white;
+            padding: 4px 14px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            direction: ltr;
+            z-index: 10;
+        }
+        .sync-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 1.5s infinite;
+        }
+        .sync-dot.offline { background: #f44336; animation: none; }
+        @keyframes pulse {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .auth-panel {
+            background: #eef2f7;
+            border-radius: 20px;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 12px;
+            justify-content: center;
+            border: 1px solid #bdd4e8;
+        }
+        .auth-group { flex: 1; min-width: 140px; }
+        .auth-group label { display: block; font-weight: 800; font-size: 14px; margin-bottom: 5px; color: #0a1f3b; }
+        .auth-group select, .auth-group input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: 2px solid #cbd5e1;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 600;
+            text-align: center;
+        }
+        .auth-group input { direction: ltr; letter-spacing: 2px; }
+        .auth-group button {
+            background: #0a1f3b;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 40px;
+            font-weight: 800;
+            cursor: pointer;
+            width: 100%;
+            transition: 0.2s;
+        }
+        .auth-group button:hover { background: #1e4663; transform: scale(0.97); }
+        .session-info {
+            background: #d4e6f1;
+            border-radius: 30px;
+            padding: 8px 15px;
+            text-align: center;
+            font-weight: 800;
+            color: #0a2f44;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .report-header h1 { font-size: 38px; font-weight: 900; color: #0a1f3b; text-align: center; margin-bottom: 10px; }
+        .datetime {
+            text-align: center;
+            direction: ltr;
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            font-weight: 800;
+            background: #ecf0f1;
+            padding: 8px 15px;
+            border-radius: 50px;
+            width: fit-content;
+            margin: 0 auto 20px;
+            border: 2px solid #7f8c8d;
+        }
+        .datetime .time-red { color: #b03a2e; font-weight: 900; }
+        .tanks-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 20px;
+            text-align: center;
+            border: 2px solid #1e3c72;
+            direction: ltr;
+            background: white;
+        }
+        .tanks-table th { background: #0a1f3b; color: white; padding: 14px 8px; font-weight: 900; font-size: 22px; }
+        .tanks-table td { padding: 12px 8px; border: 1px solid #a0b8c9; font-weight: 700; vertical-align: middle; }
+        .tanks-table .tank-name { font-weight: 900; background-color: #dde6ed; font-size: 22px; }
+        .tanks-table input {
+            width: 130px;
+            padding: 12px;
+            border: 2px solid #4a6a8a;
+            border-radius: 10px;
+            font-size: 22px;
+            text-align: center;
+            font-weight: 800;
+        }
+        .tanks-table input:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        .tanks-table input.avail { background-color: #d4e6f1; }
+        .tanks-table input.free { background-color: #d0ece2; }
+        .field-info {
+            display: block;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 4px;
+            color: #b03a2e;
+        }
+        .stats-section {
+            display: flex;
+            justify-content: space-evenly;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #e9eff5;
+            border-radius: 20px;
+            border: 2px solid #1e3c72;
+        }
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 22px; font-weight: 900; color: #0a1f3b; }
+        .stat-value {
+            font-size: 44px;
+            font-weight: 900;
+            background: white;
+            padding: 10px 25px;
+            border-radius: 20px;
+            border: 2px solid #1e3c72;
+            display: inline-block;
+            min-width: 150px;
+        }
+        .signature { text-align: center; font-size: 18px; font-weight: 700; background: #f4f9ff; padding: 10px; border-radius: 40px; margin: 15px 0; }
+        .actions { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 800;
+            font-size: 20px;
+            cursor: pointer;
+            font-family: 'Cairo', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: 0.2s;
+        }
+        .btn-success { background: #2c6e2c; color: white; }
+        .btn-primary { background: #0a1f3b; color: white; }
+        .btn-danger { background: #b03a2e; color: white; }
+        .btn-warning { background: #e67e22; color: white; }
+        .btn:hover { transform: translateY(-3px); }
+        @media (max-width: 700px) {
+            .tanks-table input { width: 85px; font-size: 18px; }
+            .stat-value { font-size: 32px; min-width: 110px; }
+            .btn { padding: 8px 18px; font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container" id="appContainer">
+    <!-- مؤشر المزامنة -->
+    <div class="sync-indicator" id="syncIndicator">
+        <span class="sync-dot" id="syncDot"></span>
+        <span id="syncLabel">جارٍ الاتصال...</span>
+    </div>
+
+    <div class="auth-panel">
+        <div class="auth-group">
+            <label>👤 اختر الصلاحية</label>
+            <select id="roleSelect">
+                <option value="">-- اختر --</option>
+                <option value="admin">👑 مبرمج</option>
+                <option value="tuba">🏭 مشغل Tuba</option>
+                <option value="ps1">🏭 مشغل PS.1</option>
+                <option value="zu1">🏭 مشغل Zu.1</option>
+                <option value="zu2">🏭 مشغل Zu.2</option>
+                <option value="viewer">📸 مسؤول</option>
+            </select>
+        </div>
+        <div class="auth-group">
+            <label>🔑 كلمة المرور</label>
+            <input type="password" id="rolePassword" placeholder="••••" maxlength="10" autocomplete="off">
+        </div>
+        <div class="auth-group">
+            <label> </label>
+            <button id="loginRoleBtn">تسجيل الدخول</button>
+        </div>
+    </div>
+    <div id="sessionStatus" class="session-info">⚙️ غير مسجل الدخول | الحقول مقفلة</div>
+
+    <div class="report-header">
+        <h1>الخزن والتصريف</h1>
+        <div class="datetime" id="datetimeDisplay">
+            <span id="dayDisplay"></span>, <span id="dateDisplay"></span>, <span id="timeDisplay" class="time-red"></span>
+        </div>
+    </div>
+
+    <table class="tanks-table">
+        <thead><tr><th>مستودع</th><th>Avail</th><th>Free</th></tr></thead>
+        <tbody>
+            <tr><td class="tank-name">Tuba</td>
+                <td><input type="number" class="avail" id="tubaAvail" placeholder="0" min="0" disabled><span class="field-info" id="lock_tubaAvail"></span></td>
+                <td><input type="number" class="free" id="tubaFree" placeholder="0" min="0" disabled><span class="field-info" id="lock_tubaFree"></span></td>
+            </tr>
+            <tr><td class="tank-name">PS.1</td>
+                <td><input type="number" class="avail" id="ps1Avail" placeholder="0" min="0" disabled><span class="field-info" id="lock_ps1Avail"></span></td>
+                <td><input type="number" class="free" id="ps1Free" placeholder="0" min="0" disabled><span class="field-info" id="lock_ps1Free"></span></td>
+            </tr>
+            <tr><td class="tank-name">Zu.1</td>
+                <td><input type="number" class="avail" id="zu1Avail" placeholder="0" min="0" disabled><span class="field-info" id="lock_zu1Avail"></span></td>
+                <td><input type="number" class="free" id="zu1Free" placeholder="0" min="0" disabled><span class="field-info" id="lock_zu1Free"></span></td>
+            </tr>
+            <tr><td class="tank-name">Zu.2</td>
+                <td><input type="number" class="avail" id="zu2Avail" placeholder="0" min="0" disabled><span class="field-info" id="lock_zu2Avail"></span></td>
+                <td><input type="number" class="free" id="zu2Free" placeholder="0" min="0" disabled><span class="field-info" id="lock_zu2Free"></span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="stats-section">
+        <div class="stat-item"><div class="stat-label">TOTAL Avail</div><div class="stat-value avail" id="totalAvail">0</div></div>
+        <div class="stat-item"><div class="stat-label">TOTAL Free</div><div class="stat-value free" id="totalFree">0</div></div>
+    </div>
+
+    <div class="signature">برمجة أسامة عبد العباس</div>
+
+    <div class="actions" id="actionsPanel">
+        <!-- الأزرار تُملأ ديناميكياً -->
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ========== إعدادات Firebase (تأكد من صحة المفتاح) ==========
+        const firebaseConfig = {
+            apiKey: "AIzaSyBS9q6cSswL_fjK2YYyQ3yYI",
+            authDomain: "osams-16e8c.firebaseapp.com",
+            databaseURL: "https://osams-16e8c-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "osams-16e8c",
+            storageBucket: "osams-16e8c.appspot.com",
+            messagingSenderId: "1068719894448",
+            appId: "1:1068719894448:web:170d34b72ea9642553f075"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const rootRef = db.ref('warehouse');
+        const valuesRef = rootRef.child('values');
+        const locksRef = rootRef.child('locks');
+        const archiveReqRef = rootRef.child('archiveRequest');
+        const connectedRef = db.ref('.info/connected');
+
+        const syncDot = document.getElementById('syncDot');
+        const syncLabel = document.getElementById('syncLabel');
+
+        const ROLE_PASSWORDS = { admin: "2002", tuba: "1977", ps1: "1974", zu1: "2003", zu2: "2008", viewer: "010" };
+        const ROLE_PERMISSIONS = {
+            admin: { fields: ["tubaAvail","tubaFree","ps1Avail","ps1Free","zu1Avail","zu1Free","zu2Avail","zu2Free"], canSaveImage: true, canClearOwn: true, canEditAnyTime: true },
+            tuba: { fields: ["tubaAvail","tubaFree"], canSaveImage: false, canClearOwn: false, canEditAnyTime: false },
+            ps1: { fields: ["ps1Avail","ps1Free"], canSaveImage: false, canClearOwn: false, canEditAnyTime: false },
+            zu1: { fields: ["zu1Avail","zu1Free"], canSaveImage: false, canClearOwn: false, canEditAnyTime: false },
+            zu2: { fields: ["zu2Avail","zu2Free"], canSaveImage: false, canClearOwn: false, canEditAnyTime: false },
+            viewer: { fields: [], canSaveImage: true, canClearOwn: false, canEditAnyTime: false }
+        };
+
+        let currentRole = null;
+        let canSaveImage = false;
+        let autoArchiveTriggered = false;
+
+        const inputs = {
+            tubaAvail: document.getElementById('tubaAvail'), tubaFree: document.getElementById('tubaFree'),
+            ps1Avail: document.getElementById('ps1Avail'), ps1Free: document.getElementById('ps1Free'),
+            zu1Avail: document.getElementById('zu1Avail'), zu1Free: document.getElementById('zu1Free'),
+            zu2Avail: document.getElementById('zu2Avail'), zu2Free: document.getElementById('zu2Free')
+        };
+
+        let localValues = {};
+        let localLocks = {};
+        let isOnline = false;
+
+        connectedRef.on('value', snap => {
+            isOnline = snap.val() === true;
+            syncDot.classList.toggle('offline', !isOnline);
+            syncLabel.textContent = isOnline ? 'متزامن' : 'غير متصل';
+            if (isOnline) {
+                rootRef.once('value');
+            }
+        });
+
+        rootRef.on('value', snap => {
+            const data = snap.val() || {};
+            const remoteValues = data.values || {};
+            const remoteLocks = data.locks || {};
+            const remoteArchiveReq = data.archiveRequest || null;
+
+            localValues = remoteValues;
+            localLocks = remoteLocks;
+
+            updateUIFromData();
+
+            if (remoteArchiveReq && currentRole === 'admin' && isAllFieldsFilled() && !autoArchiveTriggered) {
+                autoArchiveTriggered = true;
+                performAutoArchivePDF().then(() => {
+                    archiveReqRef.remove();
+                    localStorage.removeItem('autoArchiveRequest');
+                    autoArchiveTriggered = false;
+                });
+            }
+        });
+
+        function updateUIFromData() {
+            for (let id in inputs) {
+                if (localValues[id] !== undefined && localValues[id] !== '') {
+                    inputs[id].value = localValues[id];
+                } else {
+                    inputs[id].value = '';
+                }
+            }
+            calculateTotals();
+            updateFieldsState();
+        }
+
+        function saveToCloud() {
+            if (!isOnline) return;
+            const vals = {};
+            for (let id in inputs) {
+                vals[id] = inputs[id].value === '' ? 0 : (parseInt(inputs[id].value) || 0);
+            }
+            localValues = vals;
+            valuesRef.set(vals).catch(e => console.warn('فشل حفظ القيم', e));
+            locksRef.set(localLocks).catch(e => console.warn('فشل حفظ الأقفال', e));
+        }
+
+        function saveLocksToCloud() {
+            if (!isOnline) return;
+            locksRef.set(localLocks).catch(e => console.warn('فشل حفظ الأقفال', e));
+        }
+
+        function isFieldLocked(fieldId, role) {
+            if (role === 'admin') return false;
+            const lock = localLocks[fieldId];
+            if (!lock) return false;
+            const now = Date.now();
+            if (lock.lockedUntil > now) return true;
+            delete localLocks[fieldId];
+            saveLocksToCloud();
+            return false;
+        }
+
+        function lockField(fieldId, role) {
+            if (role === 'admin') return;
+            const lockedUntil = Date.now() + 15 * 60 * 1000;
+            localLocks[fieldId] = { lockedUntil: lockedUntil, lockedBy: role };
+            saveLocksToCloud();
+            updateFieldsState();
+        }
+
+        function lockUserFields(role) {
+            if (role === 'admin') return;
+            const fields = ROLE_PERMISSIONS[role].fields;
+            for (let f of fields) {
+                lockField(f, role);
+            }
+        }
+
+        function updateFieldsState() {
+            for (let id in inputs) {
+                const input = inputs[id];
+                const lockSpan = document.getElementById(`lock_${id}`);
+                const isLocked = isFieldLocked(id, currentRole);
+                const userCanEdit = ROLE_PERMISSIONS[currentRole]?.fields.includes(id) || false;
+
+                if (currentRole === 'admin') {
+                    input.disabled = false;
+                    if (lockSpan) lockSpan.textContent = '';
+                } else if (!userCanEdit) {
+                    input.disabled = true;
+                    if (lockSpan) lockSpan.textContent = '🔒 ليس من اختصاصك';
+                } else if (isLocked) {
+                    input.disabled = true;
+                    const lock = localLocks[id];
+                    if (lock) {
+                        const remaining = Math.ceil((lock.lockedUntil - Date.now()) / 60000);
+                        if (lockSpan) lockSpan.textContent = `🔒 مقفل ${remaining} دقيقة`;
+                    } else {
+                        if (lockSpan) lockSpan.textContent = '🔒 مقفل';
+                    }
+                } else {
+                    input.disabled = false;
+                    if (lockSpan) lockSpan.textContent = '✅ قابل للتعديل';
+                }
+            }
+            renderActionButtons();
+        }
+
+        function setFieldValue(fieldId, newValue, role) {
+            if (role !== 'admin' && isFieldLocked(fieldId, role)) {
+                alert(`⚠️ حقل ${fieldId} مقفل لمدة 15 دقيقة من آخر تأكيد (OK). لا يمكن تعديله حالياً.`);
+                return false;
+            }
+            inputs[fieldId].value = newValue;
+            localValues[fieldId] = newValue === '' ? 0 : (parseInt(newValue) || 0);
+            saveToCloud();
+            calculateTotals();
+            updateFieldsState();
+            return true;
+        }
+
+        function calculateTotals() {
+            const getVal = (input) => input.value === '' ? 0 : (parseInt(input.value) || 0);
+            const availSum = getVal(inputs.tubaAvail)+getVal(inputs.ps1Avail)+getVal(inputs.zu1Avail)+getVal(inputs.zu2Avail);
+            const freeSum = getVal(inputs.tubaFree)+getVal(inputs.ps1Free)+getVal(inputs.zu1Free)+getVal(inputs.zu2Free);
+            document.getElementById('totalAvail').textContent = availSum.toLocaleString();
+            document.getElementById('totalFree').textContent = freeSum.toLocaleString();
+            return { availSum, freeSum };
+        }
+
+        function isAllFieldsFilled() {
+            for (let id in inputs) {
+                if (inputs[id].value.trim() === '') return false;
+                if (isNaN(parseInt(inputs[id].value))) return false;
+            }
+            return true;
+        }
+
+        async function exportToPDF(silent = false) {
+            const element = document.getElementById('appContainer');
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 3,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    windowWidth: element.scrollWidth,
+                    windowHeight: element.scrollHeight
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const pageHeight = 297;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let position = 0;
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                if (imgHeight > pageHeight) {
+                    let heightLeft = imgHeight - pageHeight;
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+                }
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
+                pdf.save(`Warehouse_Report_${timestamp}.pdf`);
+                if (!silent) alert("📄 تم حفظ التقرير كملف PDF");
+                return true;
+            } catch(err) {
+                console.error(err);
+                if (!silent) alert("⚠️ خطأ في إنشاء PDF");
+                throw err;
+            }
+        }
+
+        async function performAutoArchivePDF() {
+            if (currentRole !== 'admin') return;
+            if (!isAllFieldsFilled()) return;
+            const notify = document.createElement('div');
+            notify.textContent = '📦 أرشفة تلقائية PDF...';
+            notify.style.cssText = 'position:fixed; bottom:20px; left:20px; background:#2c6e2c; color:white; padding:12px 20px; border-radius:30px; z-index:999; font-weight:bold';
+            document.body.appendChild(notify);
+            try {
+                await exportToPDF(true);
+                notify.textContent = '✅ تم أرشفة PDF بنجاح';
+                setTimeout(() => notify.remove(), 3000);
+            } catch(e) {
+                notify.textContent = '⚠️ فشل الأرشفة';
+                setTimeout(() => notify.remove(), 2000);
+            }
+        }
+
+        function operatorConfirm() {
+            if (!currentRole || currentRole === 'viewer') return;
+            if (currentRole === 'admin') {
+                if (confirm("مسح جميع حقول المستودعات؟")) {
+                    for (let id in inputs) inputs[id].value = '';
+                    localLocks = {};
+                    saveToCloud();
+                    saveLocksToCloud();
+                    calculateTotals();
+                    updateFieldsState();
+                    autoArchiveTriggered = false;
+                }
+                return;
+            }
+            const fields = ROLE_PERMISSIONS[currentRole].fields;
+            let allFilled = true;
+            for (let f of fields) {
+                if (inputs[f].value.trim() === '') allFilled = false;
+            }
+            if (!allFilled) {
+                alert(`⚠️ يجب ملء جميع حقول ${currentRole} قبل تأكيد OK.`);
+                return;
+            }
+            lockUserFields(currentRole);
+            alert(`✅ تم تأكيد بيانات ${currentRole} وقفل الحقول لمدة 15 دقيقة.`);
+            if (isAllFieldsFilled()) {
+                if (currentRole === 'admin') {
+                    performAutoArchivePDF();
+                } else {
+                    archiveReqRef.set(Date.now()).then(() => {
+                        localStorage.setItem('autoArchiveRequest', Date.now().toString());
+                    });
+                }
+            }
+        }
+
+        function renderActionButtons() {
+            const panel = document.getElementById('actionsPanel');
+            panel.innerHTML = '';
+            if (currentRole && currentRole !== 'viewer') {
+                const okBtn = document.createElement('button');
+                okBtn.className = 'btn btn-success';
+                if (currentRole === 'admin') okBtn.innerHTML = '✅ OK (مسح الكل)';
+                else okBtn.innerHTML = '✅ OK (تأكيد وقفل حقلي)';
+                okBtn.addEventListener('click', operatorConfirm);
+                panel.appendChild(okBtn);
+            }
+            if (canSaveImage && currentRole) {
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn btn-primary';
+                saveBtn.innerHTML = '📄 حفظ كـ PDF';
+                saveBtn.addEventListener('click', () => exportToPDF(false));
+                panel.appendChild(saveBtn);
+            }
+        }
+
+        function attachInputEvents() {
+            for (let id in inputs) {
+                inputs[id].addEventListener('input', function(e) {
+                    if (!currentRole) {
+                        e.target.value = localValues[id] || '';
+                        alert("يجب تسجيل الدخول أولاً");
+                        return;
+                    }
+                    const newVal = e.target.value;
+                    const success = setFieldValue(id, newVal, currentRole);
+                    if (!success) {
+                        e.target.value = localValues[id] || '';
+                    }
+                });
+            }
+        }
+
+        document.getElementById('loginRoleBtn').addEventListener('click', function() {
+            const role = document.getElementById('roleSelect').value;
+            const password = document.getElementById('rolePassword').value;
+            if (!role) { alert("اختر الصلاحية"); return; }
+            if (ROLE_PASSWORDS[role] !== password) {
+                alert("كلمة المرور غير صحيحة");
+                document.getElementById('rolePassword').value = '';
+                return;
+            }
+            currentRole = role;
+            const perm = ROLE_PERMISSIONS[role];
+            canSaveImage = perm.canSaveImage;
+            let roleName = "";
+            switch(role) {
+                case 'admin': roleName = "👑 المبرمج (كامل الصلاحيات)"; break;
+                case 'tuba': roleName = "🏭 مشغل Tuba"; break;
+                case 'ps1': roleName = "🏭 مشغل PS.1"; break;
+                case 'zu1': roleName = "🏭 مشغل Zu.1"; break;
+                case 'zu2': roleName = "🏭 مشغل Zu.2"; break;
+                case 'viewer': roleName = "📸 مسؤول (حفظ PDF)"; break;
+            }
+            document.getElementById('sessionStatus').innerHTML = `✅ مسجل كـ: ${roleName} | يمكنك تعديل ${perm.fields.length} حقل. بعد إدخال البيانات اضغط OK لقفلها 15 دقيقة.`;
+            document.getElementById('rolePassword').value = '';
+            updateFieldsState();
+            renderActionButtons();
+            autoArchiveTriggered = false;
+            archiveReqRef.once('value').then(snap => {
+                if (snap.val() && currentRole === 'admin' && isAllFieldsFilled() && !autoArchiveTriggered) {
+                    autoArchiveTriggered = true;
+                    performAutoArchivePDF().then(() => {
+                        archiveReqRef.remove();
+                        autoArchiveTriggered = false;
+                    });
+                }
+            });
+        });
+
+        document.getElementById('rolePassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('loginRoleBtn').click(); });
+
+        function updateDateTime() {
+            const now = new Date();
+            const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            document.getElementById('dayDisplay').textContent = days[now.getDay()];
+            document.getElementById('dateDisplay').textContent = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+            let hours = now.getHours();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            document.getElementById('timeDisplay').textContent = `${hours}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')} ${ampm}`;
+        }
+        setInterval(updateDateTime, 1000);
+        updateDateTime();
+
+        setInterval(() => {
+            if (currentRole) updateFieldsState();
+        }, 60000);
+
+        attachInputEvents();
+        for (let id in inputs) inputs[id].disabled = true;
+    })();
+</script>
+</body>
+</html>
