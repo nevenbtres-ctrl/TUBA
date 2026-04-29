@@ -1,6 +1,7 @@
 {
   "name": "الخزن والتصريف - تقرير المستودع",
   "short_name": "تقرير المستودع",
+  "description": "تطبيق تقرير الخزن والتصريف للمستودعات - Tuba, PS.1, Zu.1, Zu.2",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0a1f3b",
