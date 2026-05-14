@@ -1,0 +1,33 @@
+name: Build Web APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install PWABuilder
+        run: npm install -g @pwabuilder/pwabuilder
+
+      - name: Generate Android Package
+        run: pwabuilder build --platform android
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-apk
+          path: |
+            pwabuilder-output/*.apk
+            pwabuilder-output/*.aab
