@@ -1,20 +1,18 @@
 {
-  "name": "الخزن والتصريف - تقرير المستودع",
-  "short_name": "تقرير المستودع",
-  "description": "تطبيق تقرير الخزن والتصريف للمستودعات - Tuba, PS.1, Zu.1, Zu.2",
-  "start_url": ".",
+  "name": "Al-Tuba Oil Depot",
+  "short_name": "Tuba Depot",
+  "start_url": "TUBA.html",
   "display": "standalone",
-  "background_color": "#0a1f3b",
-  "theme_color": "#0a1f3b",
-  "orientation": "portrait-primary",
+  "background_color": "#dfe6e9",
+  "theme_color": "#d35400",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "Icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "icon-512.png",
+      "src": "Icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
